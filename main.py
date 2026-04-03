@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from db.database import init_db
 from models.schemas import AgentInvokeRequest, AgentInvokeResponse, HealthResponse
@@ -30,6 +31,11 @@ app = FastAPI(
 )
 
 orchestrator = OrchestratorAgent()
+
+
+@app.get("/")
+async def frontend() -> FileResponse:
+    return FileResponse("agentflow-frontend.html")
 
 
 @app.get("/health")

@@ -79,6 +79,11 @@ class IntentRouter:
             return [{"tool": "add_task", "params": {"title": query}}]
         if "complete" in q and "task" in q:
             return [{"tool": "complete_task", "params": {"task_id": _extract_int(q)}}]
+        if "task" in q and any(word in q for word in ["week", "due", "upcoming"]):
+            return [
+                {"tool": "list_tasks", "params": {"status": "pending"}},
+                {"tool": "summarize_tasks"},
+            ]
         if "task" in q and any(word in q for word in ["list", "pending", "show"]):
             return [{"tool": "list_tasks", "params": {"status": "pending" if "pending" in q else None}}]
         if "note" in q and any(word in q for word in ["add", "save", "store"]):

@@ -96,6 +96,11 @@ class GeminiIntentPlanner:
             actions = [{"tool": "add_task", "params": {"title": query}}]
         elif "complete task" in q:
             actions = [{"tool": "complete_task", "params": {"task_id": _extract_int(q)}}]
+        elif "task" in q and any(word in q for word in ["week", "due", "upcoming"]):
+            actions = [
+                {"tool": "list_tasks", "params": {"status": "pending"}},
+                {"tool": "summarize_tasks"},
+            ]
         elif "list" in q and "task" in q:
             actions = [{"tool": "list_tasks", "params": {"status": "pending" if "pending" in q else None}}]
         elif "save note" in q or q.startswith("note:"):
