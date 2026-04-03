@@ -695,6 +695,67 @@
     font-size: 12px;
     font-family: 'JetBrains Mono', monospace;
   }
+
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .control-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .control-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.06);
+  }
+
+  .toast-wrap {
+    position: fixed;
+    right: 14px;
+    bottom: 14px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 320px;
+  }
+
+  .toast {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    animation: slideUp 0.25s ease;
+  }
+
+  .toast.success { border-color: rgba(16,185,129,0.35); }
+  .toast.info { border-color: rgba(0,229,255,0.35); }
+  .toast.error { border-color: rgba(239,68,68,0.35); }
+
+  @media (max-width: 980px) {
+    .main {
+      grid-template-columns: 1fr;
+    }
+    .dashboard-panel {
+      border-top: 1px solid var(--border);
+      border-left: none;
+      max-height: 42vh;
+    }
+  }
 </style>
 </head>
 <body>
@@ -705,8 +766,8 @@
     <div class="logo-text">Agent<span>Flow</span></div>
   </div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('chat')">Chat</button>
-    <button class="nav-tab" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="nav-tab active" onclick="switchTab('chat', this)">Chat</button>
+    <button class="nav-tab" onclick="switchTab('dashboard', this)">Dashboard</button>
   </div>
   <div class="status-pill">
     <div class="status-dot"></div>
@@ -750,6 +811,10 @@
           <button class="send-btn" id="sendBtn" onclick="sendMessage()"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
         </div>
         <div class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for newline &nbsp;·&nbsp; Connected to Cloud Run API</div>
+        <div class="controls-row">
+          <button class="control-btn" onclick="clearConversation()">Clear Conversation</button>
+          <button class="control-btn" onclick="resetDashboard()">Reset Dashboard</button>
+        </div>
       </div>
     </div>
 
@@ -849,6 +914,8 @@
   </div>
 </div>
 
+<div class="toast-wrap" id="toastWrap"></div>
+
 <script>
   const API_BASE = 'https://agentflow-130153985798.us-central1.run.app';
 
@@ -871,11 +938,11 @@
 
   let isTyping = false;
 
-  function switchTab(tab) {
+  function switchTab(tab, targetBtn) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.add('active');
-    event.target.classList.add('active');
+    if (targetBtn) targetBtn.classList.add('active');
     if (tab === 'dashboard') updateDashboard();
   }
 
@@ -895,6 +962,49 @@
     const text = el.childNodes[el.childNodes.length - 1].textContent.trim();
     document.getElementById('chatInput').value = text;
     sendMessage();
+  }
+
+  function showToast(text, type = 'info') {
+    const wrap = document.getElementById('toastWrap');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = text;
+    wrap.appendChild(toast);
+    setTimeout(() => toast.remove(), 2800);
+  }
+
+  function clearConversation() {
+    const messages = document.getElementById('chatMessages');
+    messages.innerHTML = '';
+    const welcome = document.createElement('div');
+    welcome.className = 'welcome';
+    welcome.id = 'welcomeScreen';
+    welcome.innerHTML = `
+      <div class="welcome-icon"><svg class="icon-svg" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="2"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg></div>
+      <h2>AgentFlow Assistant</h2>
+      <p>Multi-agent workspace assistant for task execution, calendar coordination, and structured productivity workflows.</p>
+      <div class="suggestions">
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: var(--accent)">Task</div>Create a task to review the hackathon submission by Friday</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: #a78bfa">Calendar</div>Schedule a team sync meeting tomorrow at 3pm</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: var(--accent3)">Multi-step</div>Create a task and add a calendar reminder for my project deadline</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: var(--warn)">Info</div>What tasks do I have due this week?</div>
+      </div>`;
+    messages.appendChild(welcome);
+    showToast('Conversation cleared.', 'info');
+  }
+
+  function resetDashboard() {
+    state.tasks = [];
+    state.events = [];
+    state.activities = [];
+    state.queryCount = 0;
+    state.successCount = 0;
+    renderTasks();
+    renderEvents();
+    renderActivity();
+    updateStats();
+    updateDashboard();
+    showToast('Dashboard state reset.', 'info');
   }
 
   function hideWelcome() {
@@ -1119,23 +1229,52 @@
       state.successCount++;
     }
 
-    // Extract tasks from steps
+    // Extract task and event data from structured payloads.
     if (data.steps) {
       data.steps.forEach(step => {
         if (step.success) {
-          if (step.action && (step.action.includes('task') || step.action.includes('add'))) {
-            const taskText = step.message.replace(/^Task created:\s*/i, '').trim();
-            if (taskText && taskText !== step.action) {
-              state.tasks.push({ text: taskText, done: false });
-              addActivity('task', 'Task created: ' + taskText.substring(0, 45));
+          if (step.action === 'add_task') {
+            const title = step?.payload?.title || step?.payload?.todoist?.task?.content;
+            if (title) {
+              upsertTask({
+                id: String(step?.payload?.id || step?.payload?.todoist?.task?.id || title),
+                text: title,
+                done: step?.payload?.status === 'completed'
+              });
+              addActivity('task', 'Task created: ' + title.substring(0, 45));
             }
           }
-          if (step.action && (step.action.includes('calendar') || step.action.includes('event') || step.action.includes('schedule'))) {
-            const evText = step.message.replace(/^(Event|Meeting) (created|scheduled):\s*/i, '').trim();
-            if (evText) {
-              state.events.push({ title: evText.substring(0, 50), time: extractTime(query) });
-              addActivity('calendar', 'Event scheduled: ' + evText.substring(0, 40));
-            }
+
+          if (step.action === 'list_tasks') {
+            const tasks = Array.isArray(step?.payload?.tasks) ? step.payload.tasks : [];
+            tasks.forEach((t) => {
+              if (t?.title) {
+                upsertTask({
+                  id: String(t.id || t.title),
+                  text: t.title,
+                  done: t.status === 'completed'
+                });
+              }
+            });
+            addActivity('task', `Fetched ${tasks.length} task(s).`);
+          }
+
+          if (step.action === 'create_calendar_event') {
+            const event = step?.payload?.event || {};
+            const title = event.title || 'Calendar event';
+            const time = parseIsoTime(event.start) || extractTime(query) || 'TBD';
+            upsertEvent({ id: String(event.id || title + time), title, time });
+            addActivity('calendar', 'Event scheduled: ' + title.substring(0, 40));
+          }
+
+          if (step.action === 'list_calendar_events') {
+            const events = Array.isArray(step?.payload?.events) ? step.payload.events : [];
+            events.forEach((e) => {
+              const title = e?.title || 'Calendar event';
+              const time = parseIsoTime(e?.start) || 'TBD';
+              upsertEvent({ id: String(e?.id || title + time), title, time });
+            });
+            addActivity('calendar', `Fetched ${events.length} calendar event(s).`);
           }
         }
       });
@@ -1153,11 +1292,41 @@
       });
     }
 
-    addActivity('info', `Query processed (${data.intent ? data.intent.join(', ') : 'general'})`);
+    addActivity('info', `Query processed (${formatIntents(data.intent)})`);
 
     renderTasks();
     renderEvents();
     updateStats();
+  }
+
+  function formatIntents(intents) {
+    if (!Array.isArray(intents) || !intents.length) return 'general';
+    return intents.map(i => i.replace(/_/g, ' ')).join(', ');
+  }
+
+  function upsertTask(task) {
+    const idx = state.tasks.findIndex((t) => t.id === task.id);
+    if (idx >= 0) {
+      state.tasks[idx] = { ...state.tasks[idx], ...task };
+      return;
+    }
+    state.tasks.push(task);
+  }
+
+  function upsertEvent(event) {
+    const idx = state.events.findIndex((e) => e.id === event.id);
+    if (idx >= 0) {
+      state.events[idx] = { ...state.events[idx], ...event };
+      return;
+    }
+    state.events.push(event);
+  }
+
+  function parseIsoTime(value) {
+    if (!value || typeof value !== 'string') return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   function extractTime(query) {
@@ -1202,16 +1371,19 @@
         const err = await res.json().catch(() => ({}));
         addMessage('agent', 'API error: ' + (err.detail || res.status), null);
         addActivity('info', 'API error: ' + res.status);
+        showToast('API request failed.', 'error');
       } else {
         const data = await res.json();
         processResponse(data, query);
         const reply = buildReply(data);
         addMessage('agent', reply, { intent: data.intent, steps: data.steps });
+        showToast(data.success ? 'Request processed successfully.' : 'Request completed with issues.', data.success ? 'success' : 'error');
       }
     } catch (err) {
       hideTyping();
       addMessage('agent', 'Could not reach AgentFlow API. Check connection.', null);
       addActivity('info', 'Connection error');
+      showToast('Could not reach API endpoint.', 'error');
     }
 
     isTyping = false;
