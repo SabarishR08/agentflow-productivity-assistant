@@ -4,6 +4,12 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args: ["push", "gcr.io/$PROJECT_ID/agentflow"]
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud secrets versions access latest --secret=GOOGLE_CALENDAR_KEY > /workspace/calendar-key.json
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
@@ -18,6 +24,12 @@ steps:
       - --allow-unauthenticated
       - --port
       - "8080"
+      - --set-secrets=TODOIST_API_TOKEN=TODOIST_API_TOKEN:latest
+      - --set-env-vars=GOOGLE_CALENDAR_ID=sabarish.edu2024@gmail.com
+      - --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/tmp/calendar-key.json
+      - --add-volume=name=calendar-key-volume,type=secret,secret=GOOGLE_CALENDAR_KEY,items=latest=calendar-key.json
+      - --add-volume-mount=volume=calendar-key-volume,mount-path=/tmp
+      - --service-account=agentflow-calendar-agent@agentflow-prod-assistant.iam.gserviceaccount.com
 images:
   - gcr.io/$PROJECT_ID/agentflow
 substitutions:
