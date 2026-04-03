@@ -1,16 +1,34 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import google.auth
 import httpx
+from google.oauth2 import service_account
 
 
 class CalendarMCPClient:
     def __init__(self) -> None:
         self.base_url = os.getenv("MCP_CALENDAR_URL", "").rstrip("/")
         self.auth_token = os.getenv("MCP_CALENDAR_TOKEN", "").strip()
+        self.google_credentials = self._load_calendar_credentials()
+
+    @staticmethod
+    def _load_calendar_credentials() -> service_account.Credentials | None:
+        raw = os.environ.get("GOOGLE_CALENDAR_KEY", "").strip()
+        if not raw:
+            return None
+
+        try:
+            key_info = json.loads(raw)
+            if not isinstance(key_info, dict) or not key_info:
+                return None
+            return service_account.Credentials.from_service_account_info(key_info)
+        except Exception:
+            return None
 
     async def create_event(self, title: str, start_hint: str | None = None) -> dict[str, Any]:
         start_time = self._resolve_start(start_hint)
