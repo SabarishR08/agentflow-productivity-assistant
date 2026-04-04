@@ -33,8 +33,8 @@ class GeminiIntentPlanner:
             "You are an orchestration planner for a productivity assistant. "
             "Return strictly valid JSON with keys: actions (array), reasoning (string). "
             "Each action item must use one of tools: add_task, list_tasks, complete_task, summarize_tasks, "
-            "save_note, list_notes, summarize_notes, create_calendar_event, list_calendar_events, "
-            "get_upcoming_schedule, fetch_info. "
+            "save_note, get_notes, list_notes, summarize_notes, create_calendar_event, list_calendar_events, "
+            "get_upcoming_schedule, daily_briefing, fetch_info. "
             "If parameters are needed, include params object. "
             "If the query asks for both task and calendar actions in one request, return both action types. "
             "\n\nUser query: "
@@ -105,6 +105,16 @@ class GeminiIntentPlanner:
             ]
         elif "list" in q and "task" in q:
             actions = [{"tool": "list_tasks", "params": {"status": "pending" if "pending" in q else None}}]
+        elif _is_daily_briefing_query(q):
+            actions = [{"tool": "daily_briefing", "params": {}}]
+        elif any(phrase in q for phrase in ["save a note", "remember that", "note this", "write down"]):
+            actions = [{"tool": "save_note", "params": {"content": query}}]
+        elif any(phrase in q for phrase in ["what did i note", "find my note about", "show my notes"]):
+            note_query = query
+            if "about" in q:
+                idx = q.index("about")
+                note_query = query[idx + len("about"):].strip() or query
+            actions = [{"tool": "get_notes", "params": {"query": note_query}}]
         elif "save note" in q or q.startswith("note:"):
             actions = [{"tool": "save_note", "params": {"content": query}}]
         elif "summar" in q and "note" in q:
@@ -157,6 +167,18 @@ def _is_multi_step_query(q: str) -> bool:
     has_time = re.search(r"\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b", q) is not None
     has_day_phrase = re.search(r"\bon\s+([a-z]+\s+)?(" + "|".join(day_words) + r")\b", q) is not None
     return has_task and (has_calendar_word or has_time or has_day_phrase)
+
+
+def _is_daily_briefing_query(q: str) -> bool:
+    keywords = [
+        "my day",
+        "daily briefing",
+        "what's today",
+        "what do i have today",
+        "morning briefing",
+        "today's schedule",
+    ]
+    return any(keyword in q for keyword in keywords)
 
 
 def plan_to_dict(plan: Plan) -> dict[str, Any]:

@@ -476,6 +476,32 @@
     letter-spacing: 0.3px;
   }
 
+  .quick-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .quick-actions button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1.2;
+  }
+
+  .quick-actions button:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.06);
+  }
+
   /* Dashboard panel */
   .dashboard-panel {
     display: flex;
@@ -801,6 +827,18 @@
               <div class="suggestion-label" style="color: var(--warn)">Info</div>
               What tasks do I have due this week?
             </div>
+            <div class="suggestion" onclick="sendSuggestion(this)">
+              <div class="suggestion-label" style="color: #fbbf24">Briefing</div>
+              Give me my daily briefing
+            </div>
+            <div class="suggestion" onclick="sendSuggestion(this)">
+              <div class="suggestion-label" style="color: #34d399">Notes</div>
+              Save a note: review demo video before submission
+            </div>
+            <div class="suggestion" onclick="sendSuggestion(this)">
+              <div class="suggestion-label" style="color: #fb7185">Smart Remind</div>
+              Remind me to submit the hackathon by Friday at 5pm
+            </div>
           </div>
         </div>
       </div>
@@ -809,6 +847,15 @@
           <textarea class="chat-input" id="chatInput" placeholder="Ask AgentFlow anything... create tasks, schedule events, take notes" rows="1"
             onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
           <button class="send-btn" id="sendBtn" onclick="sendMessage()"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
+        </div>
+        <div class="quick-actions">
+          <button onclick="quickSend('Create a task to review the hackathon submission by Friday')">📋 Task</button>
+          <button onclick="quickSend('Schedule a team sync tomorrow at 3pm')">📅 Calendar</button>
+          <button onclick="quickSend('Create a task and add a calendar reminder for my project deadline next Monday')">🔗 Multi-step</button>
+          <button onclick="quickSend('What tasks do I have due this week?')">🔍 Query</button>
+          <button onclick="quickSend('Give me my daily briefing')">🌅 Briefing</button>
+          <button onclick="quickSend('Save a note: review demo video before submission')">📝 Notes</button>
+          <button onclick="quickSend('Remind me to submit the hackathon by Friday at 5pm')">🔔 Smart Remind</button>
         </div>
         <div class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for newline &nbsp;·&nbsp; Connected to Cloud Run API</div>
         <div class="controls-row">
@@ -863,7 +910,7 @@
       </div>
       <div class="api-bar">
         <span>API</span>
-        <span class="api-url">agentflow-130153985798.us-central1.run.app</span>
+        <span class="api-url" id="apiUrlValue">agentflow-34daigl7xa-uc.a.run.app</span>
       </div>
     </div>
   </div>
@@ -917,7 +964,13 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
-  const API_BASE = 'https://agentflow-130153985798.us-central1.run.app';
+  const API = (window.location.origin && window.location.origin.startsWith('http'))
+    ? window.location.origin
+    : 'https://agentflow-34daigl7xa-uc.a.run.app';
+  const apiUrlValueEl = document.getElementById('apiUrlValue');
+  if (apiUrlValueEl) {
+    apiUrlValueEl.textContent = API.replace(/^https?:\/\//, '');
+  }
 
   function iconSvg(name) {
     const icons = {
@@ -964,6 +1017,11 @@
     sendMessage();
   }
 
+  function quickSend(text) {
+    document.getElementById('chatInput').value = text;
+    sendMessage();
+  }
+
   function showToast(text, type = 'info') {
     const wrap = document.getElementById('toastWrap');
     const toast = document.createElement('div');
@@ -988,6 +1046,9 @@
         <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: #a78bfa">Calendar</div>Schedule a team sync meeting tomorrow at 3pm</div>
         <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: var(--accent3)">Multi-step</div>Create a task and add a calendar reminder for my project deadline</div>
         <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: var(--warn)">Info</div>What tasks do I have due this week?</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: #fbbf24">Briefing</div>Give me my daily briefing</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: #34d399">Notes</div>Save a note: review demo video before submission</div>
+        <div class="suggestion" onclick="sendSuggestion(this)"><div class="suggestion-label" style="color: #fb7185">Smart Remind</div>Remind me to submit the hackathon by Friday at 5pm</div>
       </div>`;
     messages.appendChild(welcome);
     showToast('Conversation cleared.', 'info');
@@ -1072,7 +1133,11 @@
 
         const msg = document.createElement('div');
         msg.className = 'step-msg';
-        msg.textContent = step.message || '';
+        let stepMessage = step.message || '';
+        if (step.action === 'send_reminder_email' && step?.payload?.to && !stepMessage.includes(step.payload.to)) {
+          stepMessage = `${stepMessage} (${step.payload.to})`;
+        }
+        msg.textContent = stepMessage;
 
         card.appendChild(header);
         card.appendChild(msg);
@@ -1091,6 +1156,7 @@
     if (!action) return 'info';
     if (action.includes('task')) return 'task';
     if (action.includes('calendar') || action.includes('event') || action.includes('schedule')) return 'calendar';
+    if (action.includes('email')) return 'info';
     if (action.includes('note')) return 'notes';
     return 'info';
   }
@@ -1102,6 +1168,7 @@
       summarize_tasks: 'Summarized Results',
       create_calendar_event: 'Scheduled Event',
       list_calendar_events: 'Checked Calendar',
+      send_reminder_email: '📧 Email Sent',
       fetch_info: 'Queried Information'
     };
     return mapping[action] || String(action || 'step').replace(/_/g, ' ');
@@ -1501,7 +1568,7 @@
     showTyping();
 
     try {
-      const res = await fetch(API_BASE + '/invoke', {
+      const res = await fetch(API + '/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })

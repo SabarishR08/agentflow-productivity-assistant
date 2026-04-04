@@ -20,6 +20,8 @@ steps:
       - "8080"
       - --set-secrets=TODOIST_API_TOKEN=TODOIST_API_TOKEN:latest
       - --set-secrets=GOOGLE_CALENDAR_KEY=GOOGLE_CALENDAR_KEY:latest
+      - --set-secrets=GMAIL_USER=GMAIL_USER:latest
+      - --set-secrets=GMAIL_APP_PASSWORD=GMAIL_APP_PASSWORD:latest
       - --set-env-vars=GOOGLE_CALENDAR_ID=sabarish.edu2024@gmail.com
 images:
   - gcr.io/$PROJECT_ID/agentflow

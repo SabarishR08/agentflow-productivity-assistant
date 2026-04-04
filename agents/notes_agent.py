@@ -19,9 +19,20 @@ class NotesResult:
 
 
 class NotesAgent:
+    def save_note(self, content: str) -> dict:
+        return save_note(content=content)
+
+    def get_notes(self, query: str, limit: int = 20) -> dict:
+        return get_notes(query=query, limit=limit)
+
     async def invoke(self, tool: str, params: dict) -> dict:
         if tool == "save_note":
-            return save_note(content=str(params.get("content", "")))
+            return self.save_note(content=str(params.get("content", "")))
+        if tool == "get_notes":
+            return self.get_notes(
+                query=str(params.get("query", "")),
+                limit=int(params.get("limit", 20)),
+            )
         if tool == "list_notes":
             return list_notes(limit=int(params.get("limit", 20)))
         if tool == "summarize_notes":
@@ -64,6 +75,30 @@ def list_notes(limit: int = 20) -> dict:
         payload={"notes": payload},
     )
     return asdict(result)
+
+
+def get_notes(query: str, limit: int = 20) -> dict:
+    cleaned_query = query.strip().lower()
+    with SessionLocal() as session:
+        stmt = select(Note).order_by(Note.id.desc()).limit(limit)
+        notes = session.execute(stmt).scalars().all()
+
+    filtered = notes
+    if cleaned_query:
+        filtered = [n for n in notes if cleaned_query in (n.content or "").lower()]
+
+    payload = [
+        {"id": n.id, "content": n.content, "created_at": n.created_at.isoformat()}
+        for n in filtered
+    ]
+    return asdict(
+        NotesResult(
+            action="get_notes",
+            success=True,
+            message=f"Fetched {len(payload)} matching note(s).",
+            payload={"notes": payload, "query": query},
+        )
+    )
 
 
 def summarize_notes(limit: int = 20) -> dict:

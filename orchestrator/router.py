@@ -11,7 +11,8 @@ from orchestrator.planner import GeminiIntentPlanner
 class Intent(str, Enum):
     TASK = "task_management"
     CALENDAR = "calendar"
-    NOTES = "notes"
+    NOTES_MANAGEMENT = "notes_management"
+    DAILY_BRIEFING = "daily_briefing"
     GENERAL = "general_query"
 
 
@@ -30,9 +31,11 @@ _TOOL_INTENT_MAP: dict[str, Intent] = {
     "create_calendar_event": Intent.CALENDAR,
     "list_calendar_events": Intent.CALENDAR,
     "get_upcoming_schedule": Intent.CALENDAR,
-    "save_note": Intent.NOTES,
-    "list_notes": Intent.NOTES,
-    "summarize_notes": Intent.NOTES,
+    "daily_briefing": Intent.DAILY_BRIEFING,
+    "save_note": Intent.NOTES_MANAGEMENT,
+    "get_notes": Intent.NOTES_MANAGEMENT,
+    "list_notes": Intent.NOTES_MANAGEMENT,
+    "summarize_notes": Intent.NOTES_MANAGEMENT,
     "fetch_info": Intent.GENERAL,
 }
 
@@ -42,6 +45,13 @@ class IntentRouter:
         self.planner = GeminiIntentPlanner()
 
     def route(self, query: str) -> RouteDecision:
+        if self._is_daily_briefing_query(query):
+            return RouteDecision(
+                intents=[Intent.DAILY_BRIEFING],
+                actions=[{"tool": "daily_briefing", "params": {}}],
+                reasoning="router matched daily briefing keywords",
+            )
+
         plan = self.planner.plan(query)
         actions = [a for a in plan.actions if isinstance(a, dict)]
 
@@ -74,6 +84,19 @@ class IntentRouter:
                 intents.append(intent)
 
         return intents or [Intent.GENERAL]
+
+    @staticmethod
+    def _is_daily_briefing_query(query: str) -> bool:
+        q = query.lower()
+        keywords = [
+            "my day",
+            "daily briefing",
+            "what's today",
+            "what do i have today",
+            "morning briefing",
+            "today's schedule",
+        ]
+        return any(keyword in q for keyword in keywords)
 
     @staticmethod
     def _is_multi_step_query(query: str) -> bool:
@@ -139,6 +162,14 @@ class IntentRouter:
             ]
         if "task" in q and any(word in q for word in ["list", "pending", "show"]):
             return [{"tool": "list_tasks", "params": {"status": "pending" if "pending" in q else None}}]
+        if any(phrase in q for phrase in ["save a note", "remember that", "note this", "write down"]):
+            return [{"tool": "save_note", "params": {"content": query}}]
+        if any(phrase in q for phrase in ["what did i note", "find my note about", "show my notes"]):
+            note_query = query
+            marker = "about"
+            if marker in q:
+                note_query = query[q.index(marker) + len(marker):].strip()
+            return [{"tool": "get_notes", "params": {"query": note_query}}]
         if "note" in q and any(word in q for word in ["add", "save", "store"]):
             return [{"tool": "save_note", "params": {"content": query}}]
         if "note" in q and "summar" in q:
