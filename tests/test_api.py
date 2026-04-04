@@ -20,6 +20,7 @@ def test_invoke_endpoint_contract() -> None:
 
     body = response.json()
     assert "result" in body
+    assert "response" in body
     assert "success" in body
     assert "steps" in body
     assert "intent" in body

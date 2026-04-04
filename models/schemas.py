@@ -18,6 +18,7 @@ class AgentStep(BaseModel):
 
 class AgentInvokeResponse(BaseModel):
     result: str
+    response: str
     success: bool
     steps: list[AgentStep]
     intent: list[str] = Field(default_factory=list)

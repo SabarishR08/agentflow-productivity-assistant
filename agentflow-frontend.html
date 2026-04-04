@@ -843,14 +843,14 @@
         <div>
           <div class="dash-section-title">Recent Tasks</div>
           <div id="taskList">
-            <div class="empty-state">No tasks yet.<br>Ask AgentFlow to create one.</div>
+            <div class="empty-state">No tasks yet.<br>Try: "Add task: submit expense report"<br>Try: "Remind me to call Alex tomorrow"<br>Try: "Add to my list: finalize sprint notes"</div>
           </div>
         </div>
 
         <div>
           <div class="dash-section-title">Events</div>
           <div id="eventList">
-            <div class="empty-state">No events scheduled.<br>Ask AgentFlow to add one.</div>
+            <div class="empty-state">No events scheduled.<br>Try: "Schedule a meeting Monday at 2 PM"<br>Try: "Book project review next Friday at 11 AM"</div>
           </div>
         </div>
 
@@ -1044,8 +1044,14 @@
     }
 
     if (meta && meta.steps && meta.steps.length) {
-      const steps = document.createElement('div');
-      steps.className = 'agent-steps';
+      const details = document.createElement('details');
+      details.className = 'agent-steps';
+
+      const summary = document.createElement('summary');
+      summary.className = 'step-card';
+      summary.textContent = `Agent steps (${meta.steps.length})`;
+      details.appendChild(summary);
+
       meta.steps.forEach(step => {
         const card = document.createElement('div');
         card.className = 'step-card';
@@ -1055,7 +1061,7 @@
 
         const badge = document.createElement('span');
         badge.className = 'step-badge ' + getStepType(step.action);
-        badge.textContent = step.action.replace(/_/g, ' ');
+        badge.textContent = getStepLabel(step.action);
 
         const status = document.createElement('span');
         status.className = 'step-status ' + (step.success ? 'ok' : 'err');
@@ -1070,9 +1076,9 @@
 
         card.appendChild(header);
         card.appendChild(msg);
-        steps.appendChild(card);
+        details.appendChild(card);
       });
-      msgContent.appendChild(steps);
+      msgContent.appendChild(details);
     }
 
     div.appendChild(avatar);
@@ -1087,6 +1093,18 @@
     if (action.includes('calendar') || action.includes('event') || action.includes('schedule')) return 'calendar';
     if (action.includes('note')) return 'notes';
     return 'info';
+  }
+
+  function getStepLabel(action) {
+    const mapping = {
+      add_task: 'Created Task',
+      list_tasks: 'Fetched Tasks',
+      summarize_tasks: 'Summarized Results',
+      create_calendar_event: 'Scheduled Event',
+      list_calendar_events: 'Checked Calendar',
+      fetch_info: 'Queried Information'
+    };
+    return mapping[action] || String(action || 'step').replace(/_/g, ' ');
   }
 
   function showTyping() {
@@ -1145,7 +1163,7 @@
   function renderTasks() {
     const list = document.getElementById('taskList');
     if (!state.tasks.length) {
-      list.innerHTML = '<div class="empty-state">No tasks yet.<br>Ask AgentFlow to create one.</div>';
+      list.innerHTML = '<div class="empty-state">No tasks yet.<br>Try: "Add task: submit expense report"<br>Try: "Remind me to call Alex tomorrow"<br>Try: "Add to my list: finalize sprint notes"</div>';
       return;
     }
     list.innerHTML = state.tasks.slice(-5).reverse().map((t, i) => `
@@ -1164,7 +1182,7 @@
   function renderEvents() {
     const list = document.getElementById('eventList');
     if (!state.events.length) {
-      list.innerHTML = '<div class="empty-state">No events scheduled.<br>Ask AgentFlow to add one.</div>';
+      list.innerHTML = '<div class="empty-state">No events scheduled.<br>Try: "Schedule a meeting Monday at 2 PM"<br>Try: "Book project review next Friday at 11 AM"</div>';
       return;
     }
     list.innerHTML = state.events.slice(-4).reverse().map(e => `
@@ -1202,7 +1220,7 @@
         <div class="task-check ${t.done ? 'done' : ''}">${t.done ? '✓' : ''}</div>
         <div class="task-text ${t.done ? 'done' : ''}">${t.text}</div>
       </div>
-    `).join('') : '<div class="empty-state">No tasks yet.</div>';
+    `).join('') : '<div class="empty-state">No tasks yet.<br>Try: "Add task: submit expense report"<br>Try: "Remind me to call Alex tomorrow"<br>Try: "Add to my list: finalize sprint notes"</div>';
 
     const del = document.getElementById('ds-eventList');
     del.innerHTML = state.events.length ? state.events.map(e => `
@@ -1210,7 +1228,7 @@
         <div class="event-time">${e.time || 'TBD'}</div>
         <div class="event-title">${e.title}</div>
       </div>
-    `).join('') : '<div class="empty-state">No events yet.</div>';
+    `).join('') : '<div class="empty-state">No events yet.<br>Try: "Schedule a meeting Monday at 2 PM"<br>Try: "Book project review next Friday at 11 AM"</div>';
 
     const dal = document.getElementById('ds-activityLog');
     dal.innerHTML = state.activities.length ? state.activities.map(a => `
@@ -1234,7 +1252,7 @@
       data.steps.forEach(step => {
         if (step.success) {
           if (step.action === 'add_task') {
-            const title = step?.payload?.title || step?.payload?.todoist?.task?.content;
+            const title = cleanTaskText(step?.payload?.title || step?.payload?.todoist?.task?.content || step?.message || '', query, step.action);
             if (title) {
               upsertTask({
                 id: String(step?.payload?.id || step?.payload?.todoist?.task?.id || title),
@@ -1248,10 +1266,11 @@
           if (step.action === 'list_tasks') {
             const tasks = Array.isArray(step?.payload?.tasks) ? step.payload.tasks : [];
             tasks.forEach((t) => {
-              if (t?.title) {
+              const cleanedTitle = cleanTaskText(t?.title || '', query, step.action);
+              if (cleanedTitle) {
                 upsertTask({
-                  id: String(t.id || t.title),
-                  text: t.title,
+                  id: String(t.id || cleanedTitle),
+                  text: cleanedTitle,
                   done: t.status === 'completed'
                 });
               }
@@ -1261,8 +1280,10 @@
 
           if (step.action === 'create_calendar_event') {
             const event = step?.payload?.event || {};
-            const title = event.title || 'Calendar event';
-            const time = parseIsoTime(event.start) || extractTime(query) || 'TBD';
+            const title = cleanEventText(event.title || step?.message || '', query, step.action);
+            const dateLabel = parseIsoDate(event.start) || extractDate(query) || 'Unscheduled date';
+            const timeLabel = parseIsoTime(event.start) || extractTime(query) || 'TBD';
+            const time = `${dateLabel} • ${timeLabel}`;
             upsertEvent({ id: String(event.id || title + time), title, time });
             addActivity('calendar', 'Event scheduled: ' + title.substring(0, 40));
           }
@@ -1270,8 +1291,10 @@
           if (step.action === 'list_calendar_events') {
             const events = Array.isArray(step?.payload?.events) ? step.payload.events : [];
             events.forEach((e) => {
-              const title = e?.title || 'Calendar event';
-              const time = parseIsoTime(e?.start) || 'TBD';
+              const title = cleanEventText(e?.title || '', query, step.action);
+              const dateLabel = parseIsoDate(e?.start) || extractDate(query) || 'Unscheduled date';
+              const timeLabel = parseIsoTime(e?.start) || 'TBD';
+              const time = `${dateLabel} • ${timeLabel}`;
               upsertEvent({ id: String(e?.id || title + time), title, time });
             });
             addActivity('calendar', `Fetched ${events.length} calendar event(s).`);
@@ -1329,19 +1352,138 @@
     return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  function parseIsoDate(value) {
+    if (!value || typeof value !== 'string') return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
   function extractTime(query) {
     const timeMatch = query.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
     return timeMatch ? timeMatch[1] : null;
   }
 
-  function buildReply(data) {
-    if (data.response) return data.response;
-    if (data.message) return data.message;
-    if (data.steps && data.steps.length) {
-      const ok = data.steps.filter(s => s.success);
-      if (ok.length) return ok.map(s => s.message).filter(Boolean).join('\n') || 'Done! Task completed.';
+  function extractDate(query) {
+    const q = String(query || '').toLowerCase();
+    if (!q) return null;
+
+    if (q.includes('tomorrow')) return 'Tomorrow';
+    if (q.includes('today')) return 'Today';
+
+    const nextDay = q.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+    if (nextDay) {
+      return 'Next ' + nextDay[1].charAt(0).toUpperCase() + nextDay[1].slice(1);
     }
-    return data.success ? 'Done! Your request has been processed.' : 'Request processed with some issues.';
+
+    const day = q.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+    if (day) {
+      return day[1].charAt(0).toUpperCase() + day[1].slice(1);
+    }
+
+    const monthDate = q.match(/\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)\s+\d{1,2}\b/i);
+    if (monthDate) {
+      return monthDate[0].replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    return null;
+  }
+
+  function stripPrefixes(text) {
+    let value = String(text || '').trim();
+    value = value.replace(/^(task created:|created:|added:|✓)\s*/i, '');
+    value = value.replace(/^(task created:|created:|added:|✓)\s*/i, '');
+    return value.trim();
+  }
+
+  function capText(text, maxLen = 60) {
+    if (!text) return '';
+    if (text.length <= maxLen) return text;
+    return text.substring(0, maxLen - 3).trim() + '...';
+  }
+
+  function isGenericLabel(value, action) {
+    const cleaned = String(value || '').trim().toLowerCase();
+    if (cleaned.length < 10) return true;
+    if (!action) return false;
+    return cleaned === String(action).toLowerCase() || cleaned === String(action).toLowerCase().replace(/_/g, ' ');
+  }
+
+  function cleanTaskText(rawText, query, action) {
+    const cleaned = stripPrefixes(rawText);
+    const base = isGenericLabel(cleaned, action) ? String(query || '').trim() : cleaned;
+    return capText(base || String(query || '').trim());
+  }
+
+  function cleanEventText(rawText, query, action) {
+    const cleaned = stripPrefixes(rawText);
+    const base = isGenericLabel(cleaned, action) ? String(query || '').trim() : cleaned;
+    return capText(base || String(query || '').trim());
+  }
+
+  function buildReply(data) {
+    const steps = Array.isArray(data?.steps) ? data.steps : [];
+    const successSteps = steps.filter(s => s && s.success);
+    const failedSteps = steps.filter(s => s && !s.success);
+
+    if (!data?.success && failedSteps.length) {
+      const reason = failedSteps.map(s => s.message).filter(Boolean).join('; ') || 'unknown reason';
+      return `I couldn't complete that - ${reason}`;
+    }
+
+    const multiTaskStep = successSteps.find(s => s.action === 'add_task');
+    const multiEventStep = successSteps.find(s => s.action === 'create_calendar_event');
+    if (multiTaskStep && multiEventStep) {
+      const taskName = cleanTaskText(multiTaskStep?.payload?.title || multiTaskStep?.payload?.todoist?.task?.content || multiTaskStep?.message || '', '', multiTaskStep.action);
+      const eventName = cleanEventText(multiEventStep?.payload?.event?.title || multiEventStep?.message || '', '', multiEventStep.action);
+      const datePart = parseIsoDate(multiEventStep?.payload?.event?.start) || '';
+      const timePart = parseIsoTime(multiEventStep?.payload?.event?.start) || extractTime(eventName) || 'TBD';
+      const whenText = datePart ? `${datePart} at ${timePart}` : `at ${timePart}`;
+      return `Created task '${taskName}' and scheduled '${eventName}' ${whenText}.`;
+    }
+
+    const taskStep = successSteps.find(s => s.action === 'add_task');
+    if (taskStep) {
+      const taskName = cleanTaskText(taskStep?.payload?.title || taskStep?.payload?.todoist?.task?.content || taskStep?.message || '', '', taskStep.action);
+      if (taskName) return `✓ Created task: ${taskName}`;
+    }
+
+    const eventStep = successSteps.find(s => s.action === 'create_calendar_event');
+    if (eventStep) {
+      const title = cleanEventText(eventStep?.payload?.event?.title || eventStep?.message || '', '', eventStep.action);
+      const atTime = parseIsoTime(eventStep?.payload?.event?.start) || 'TBD';
+      return `✓ Scheduled: ${title} at ${atTime}`;
+    }
+
+    const listStep = successSteps.find(s => s.action === 'list_tasks');
+    if (listStep) {
+      const tasks = Array.isArray(listStep?.payload?.tasks) ? listStep.payload.tasks : [];
+      if (tasks.length) {
+        const bullets = tasks
+          .map(t => cleanTaskText(t?.title || '', '', 'list_tasks'))
+          .filter(Boolean)
+          .map(t => `- ${t}`)
+          .join('\n');
+        return `Here are your tasks:\n${bullets}`;
+      }
+      return 'Here are your tasks:\n- No tasks found';
+    }
+
+    if (successSteps.length > 1) {
+      const actions = successSteps.map(s => getStepLabel(s.action).toLowerCase());
+      return `Completed ${actions.join(' and ')}.`;
+    }
+
+    if (typeof data?.response === 'string' && data.response.trim()) {
+      return data.response;
+    }
+
+    if (data.message) return data.message;
+    if (successSteps.length) {
+      const text = successSteps.map(s => s.message).filter(Boolean).join('; ');
+      if (text) return `Completed: ${text}.`;
+    }
+    return data?.success ? 'Request completed successfully.' : "I couldn't complete that - request had issues.";
   }
 
   async function sendMessage() {

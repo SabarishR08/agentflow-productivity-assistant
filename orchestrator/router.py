@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -43,6 +44,15 @@ class IntentRouter:
     def route(self, query: str) -> RouteDecision:
         plan = self.planner.plan(query)
         actions = [a for a in plan.actions if isinstance(a, dict)]
+
+        if self._is_multi_step_query(query):
+            actions = self._ensure_multi_step_actions(actions, query)
+            return RouteDecision(
+                intents=[Intent.TASK, Intent.CALENDAR],
+                actions=actions,
+                reasoning=f"{plan.reasoning} | router enforced multi-step task+calendar execution",
+            )
+
         intents = self._intents_from_actions(actions)
 
         if not actions:
@@ -64,6 +74,49 @@ class IntentRouter:
                 intents.append(intent)
 
         return intents or [Intent.GENERAL]
+
+    @staticmethod
+    def _is_multi_step_query(query: str) -> bool:
+        q = query.lower()
+        task_keywords = ["task", "todo", "remind me to", "don't forget", "add to my list"]
+        calendar_keywords = ["schedule", "meeting", "calendar"]
+        day_words = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+            "tomorrow",
+            "today",
+            "next",
+        ]
+
+        has_task = any(keyword in q for keyword in task_keywords)
+        has_calendar_word = any(keyword in q for keyword in calendar_keywords)
+        has_time = re.search(r"\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b", q) is not None
+        has_day_phrase = re.search(r"\bon\s+([a-z]+\s+)?(" + "|".join(day_words) + r")\b", q) is not None
+
+        has_calendar = has_calendar_word or has_time or has_day_phrase
+        return has_task and has_calendar
+
+    @staticmethod
+    def _ensure_multi_step_actions(actions: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+        normalized = [action for action in actions if isinstance(action, dict)]
+        has_task_action = any(str(action.get("tool", "")).strip() in {"add_task", "list_tasks", "complete_task", "summarize_tasks"} for action in normalized)
+        has_calendar_action = any(str(action.get("tool", "")).strip() in {"create_calendar_event", "list_calendar_events", "get_upcoming_schedule"} for action in normalized)
+
+        if not has_task_action:
+            normalized.append({"tool": "add_task", "params": {"title": query}})
+        if not has_calendar_action:
+            normalized.append(
+                {
+                    "tool": "create_calendar_event",
+                    "params": {"title": query, "start_hint": "tomorrow" if "tomorrow" in query.lower() else "today"},
+                }
+            )
+        return normalized
 
     @staticmethod
     def _fallback_actions(query: str) -> list[dict[str, Any]]:

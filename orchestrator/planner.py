@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -35,6 +36,7 @@ class GeminiIntentPlanner:
             "save_note, list_notes, summarize_notes, create_calendar_event, list_calendar_events, "
             "get_upcoming_schedule, fetch_info. "
             "If parameters are needed, include params object. "
+            "If the query asks for both task and calendar actions in one request, return both action types. "
             "\n\nUser query: "
             f"{query}"
         )
@@ -76,7 +78,7 @@ class GeminiIntentPlanner:
         q = query.lower().strip()
         actions: list[dict[str, Any]] = []
 
-        if ("task" in q and "calendar" in q) or ("task" in q and "schedule" in q):
+        if _is_multi_step_query(q):
             actions = [
                 {"tool": "add_task", "params": {"title": query}},
                 {
@@ -132,6 +134,29 @@ class GeminiIntentPlanner:
 def _extract_int(text: str) -> int | None:
     digits = "".join(ch if ch.isdigit() else " " for ch in text).split()
     return int(digits[0]) if digits else None
+
+
+def _is_multi_step_query(q: str) -> bool:
+    task_keywords = ["task", "todo", "remind me to", "don't forget", "add to my list"]
+    calendar_keywords = ["schedule", "meeting", "calendar"]
+    day_words = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "tomorrow",
+        "today",
+        "next",
+    ]
+
+    has_task = any(keyword in q for keyword in task_keywords)
+    has_calendar_word = any(keyword in q for keyword in calendar_keywords)
+    has_time = re.search(r"\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b", q) is not None
+    has_day_phrase = re.search(r"\bon\s+([a-z]+\s+)?(" + "|".join(day_words) + r")\b", q) is not None
+    return has_task and (has_calendar_word or has_time or has_day_phrase)
 
 
 def plan_to_dict(plan: Plan) -> dict[str, Any]:
