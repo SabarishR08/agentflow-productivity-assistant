@@ -3,11 +3,11 @@
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue) ![Language](https://img.shields.io/badge/language-Python-informational) ![Docker](https://img.shields.io/badge/docker-ready-2496ed)
 
 
-## 📌 Overview
+## Overview
 
 AgentFlow — A multi-agent AI productivity assistant built with Google ADK and MCP. Coordinates sub-agents to manage tasks, schedules, and notes. Deployed on Google Cloud Run.
 
-## 🏗️ Architecture
+## Architecture
 
 ```text
 Browser / UI
@@ -19,7 +19,7 @@ FastAPI app
      └──▶ External services — Google Gemini
 ```
 
-## 🧰 Tech Stack
+## Tech Stack
 
 - **Language:** Python
 - **Backend:** FastAPI
@@ -27,7 +27,7 @@ FastAPI app
 - **Integrations:** Google Gemini
 - **Deployment:** Docker container
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -78,11 +78,11 @@ docker run -p 5000:5000 agentflow-productivity-assistant
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue) ![Language](https://img.shields.io/badge/language-Python-informational) ![Docker](https://img.shields.io/badge/docker-ready-2496ed)
 
 
-## 📌 Overview
+## Overview
 
 AgentFlow — A multi-agent AI productivity assistant built with Google ADK and MCP. Coordinates sub-agents to manage tasks, schedules, and notes. Deployed on Google Cloud Run.
 
-## 🏗️ Architecture
+## Architecture
 
 ```text
 Browser / UI
@@ -94,7 +94,7 @@ FastAPI app
      └──▶ External services — Google Gemini
 ```
 
-## 🧰 Tech Stack
+## Tech Stack
 
 - **Language:** Python
 - **Backend:** FastAPI
@@ -102,7 +102,7 @@ FastAPI app
 - **Integrations:** Google Gemini
 - **Deployment:** Docker container
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -147,7 +147,7 @@ docker build -t agentflow-productivity-assistant .
 docker run -p 5000:5000 agentflow-productivity-assistant
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 agentflow-productivity-assistant/
@@ -166,16 +166,16 @@ agentflow-productivity-assistant/
 ├── tools/
 ```
 
-## ☁️ Deployment
+## Deployment
 
 Containerized via Dockerfile — deployable to any container platform (Render, Railway, Cloud Run, …).
 
-## 📄 License
+## License
 
 [Apache-2.0](LICENSE) — © 2026 Sabarish R.
 
 ---
 
-## 📄 License
+## License
 
 [Apache-2.0](LICENSE) — © 2026 Sabarish R.
