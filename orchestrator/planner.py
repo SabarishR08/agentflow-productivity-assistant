@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from google import genai
+from orchestrator import llm_router
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,11 +26,10 @@ class GeminiIntentPlanner:
 
     def __init__(self) -> None:
         self.model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-        self.api_key = os.getenv("GOOGLE_API_KEY", "").strip()
 
     def plan(self, query: str) -> Plan:
-        if not self.api_key:
-            return self._fallback_plan(query, "GOOGLE_API_KEY is not set; using deterministic routing.")
+        if not llm_router.is_configured():
+            return self._fallback_plan(query, "No LLM API key is not set; using deterministic routing.")
 
         prompt = (
             "You are an orchestration planner for a productivity assistant. "
@@ -42,21 +44,27 @@ class GeminiIntentPlanner:
         )
 
         try:
-            client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(model=self.model, contents=prompt)
-            text = (response.text or "").strip()
-            parsed = self._safe_json(text)
-            if not parsed:
-                return self._fallback_plan(query, "Gemini output was not valid JSON; fallback routing used.")
+            parsed = llm_router.chat_json(
+                system_prompt=(
+                    "You are an orchestration planner for a productivity assistant. "
+                    "Return strictly valid JSON with keys: actions (array), reasoning (string). "
+                    "Each action item must use one of tools: add_task, list_tasks, complete_task, summarize_tasks, "
+                    "save_note, get_notes, list_notes, summarize_notes, create_calendar_event, list_calendar_events, "
+                    "get_upcoming_schedule, daily_briefing, fetch_info. "
+                    "If parameters are needed, include params object. "
+                    "If the query asks for both task and calendar actions in one request, return both action types."
+                ),
+                user_prompt=f"User query: {query}",
+            )
 
             actions = parsed.get("actions") if isinstance(parsed.get("actions"), list) else []
-            reasoning = str(parsed.get("reasoning", "Planned by Gemini."))
+            reasoning = str(parsed.get("reasoning", "Planned by LLM."))
             if not actions:
-                return self._fallback_plan(query, "Gemini plan was empty; fallback routing used.")
+                return self._fallback_plan(query, "LLM plan was empty; fallback routing used.")
 
             return Plan(actions=actions, reasoning=reasoning)
-        except Exception as exc:
-            return self._fallback_plan(query, f"Gemini planning failed: {exc}. Fallback routing used.")
+        except (RuntimeError, Exception) as exc:
+            return self._fallback_plan(query, f"LLM planning failed: {exc}. Fallback routing used.")
 
     @staticmethod
     def _safe_json(text: str) -> dict[str, Any] | None:
